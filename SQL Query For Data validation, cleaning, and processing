@@ -1,0 +1,171 @@
+-- Preparing the data for analysis
+-- Combining the data from the first quarter of 2021 into a single table
+CREATE TABLE  first-solo-work.97Cycles.Q1_2021 AS 
+SELECT *
+
+FROM (
+  SELECT * FROM first-solo-work.97Cycles.Jan_2021
+UNION ALL
+  SELECT * FROM first-solo-work.97Cycles.Feb_2021
+UNION ALL
+  SELECT * FROM first-solo-work.97Cycles.Mar_2021
+);
+-- Performing data validation
+-- Confirms the length of ride_ids
+SELECT 
+  length(ride_id) 
+
+FROM
+  first-solo-work.97Cycles.Q1_2021;
+-- Checking for duplicates by checking the total rows and comparing with the distinct numbers of rows for a specific column
+SELECT
+  count(*) 
+FROM
+  first-solo-work.97Cycles.Q1_2021;
+
+-- checks if ride_ids have any duplicates
+SELECT 
+  count(distinct (ride_id)) 
+FROM 
+  first-solo-work.97Cycles.Q1_2021;
+-- Results show that there are no duplicate rows
+-- Checking if there are the same number of stations for starting and ending stations
+SELECT
+  COUNT(DISTINCT end_station_name) AS end_station
+FROM 
+  first-solo-work.97Cycles.Q1_2021;
+SELECT 
+   COUNT(DISTINCT start_station_name) AS start_station
+FROM 
+  first-solo-work.97Cycles.Q1_2021;
+-- The stations are the same numbers
+-- Confirming the number of rider types to be 2
+SELECT
+ DISTINCT member_casual AS member_Type
+FROM 
+  first-solo-work.97Cycles.Q1_2021;
+-- Checking for null values the the table
+SELECT 
+  COUNT(*) - COUNT(ride_id) AS ride_id_count,
+  COUNT(*) - COUNT(rideable_type) AS rideable_type_count,
+  COUNT(*) - COUNT(started_at) AS started_at_count,
+  COUNT(*) - COUNT(ended_at) AS ended_at_count,
+  COUNT(*) - COUNT(start_lat) AS start_lat_count,
+  COUNT(*) - COUNT(start_lng) AS start_lng_count,
+  COUNT(*) - COUNT(end_lat) AS end_lat_count, 
+  COUNT(*) - COUNT(start_station_name) AS start_station_name_count, 
+  COUNT(*) - COUNT(start_station_id) AS start_station_id_count,
+  COUNT(*) - COUNT(end_station_name) AS end_station_name_count,
+  COUNT(*) - COUNT(end_station_id) AS end_station_id_count, 
+  COUNT(*) - COUNT(member_casual) AS member_casual_count,
+  COUNT(*) - COUNT(end_lng) AS end_lng_count
+FROM 
+  first-solo-work.97Cycles.Q1_2021;
+-- Cleaning and processing the data for analysis
+-- Creating a new table without the null values 
+CREATE TABLE
+  first-solo-work.97Cycles.Q1_2021_update AS
+SELECT
+  *
+FROM 
+(
+  SELECT
+    *
+  FROM
+    first-solo-work.97Cycles.Jan_2021
+  WHERE 
+  start_station_name IS NOT NULL AND
+  end_station_name IS NOT NULL AND
+  end_station_id IS NOT NULL AND
+  end_lng IS NOT NULL AND
+  start_station_id IS NOT NULL AND
+  end_lat IS NOT NULL
+  UNION ALL
+  SELECT
+    *
+  FROM
+    first-solo-work.97Cycles.Feb_2021
+  WHERE 
+    start_station_name IS NOT NULL AND
+    end_station_name IS NOT NULL AND
+    end_station_id IS NOT NULL AND
+    end_lng IS NOT NULL AND
+    start_station_id IS NOT NULL AND
+    end_lat IS NOT NULL
+  UNION ALL
+  SELECT
+    *
+  FROM
+    first-solo-work.97Cycles.Mar_2021 
+  WHERE 
+    start_station_name IS NOT NULL AND
+    end_station_name IS NOT NULL AND
+    end_station_id IS NOT NULL AND
+    end_lng IS NOT NULL AND
+    start_station_id IS NOT NULL AND
+    end_lat IS NOT NULL
+);
+-- Addition of new roles to the table for the analysis 
+-- Day of the week AS day_of_week, Month AS month, Day AS day, Year AS year, ride length as ride_length, formatted timestamp AS time
+CREATE TABLE 
+  first-solo-work.97Cycles.Q1_2021_final 
+AS
+SELECT
+  ride_id, rideable_type, start_station_name, end_station_name, start_lat, start_lng, end_lat, end_lng, member_casual AS member_type, started_at,
+  CASE 
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 1 THEN 'SUN'
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 2 THEN 'MON'
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 3 THEN 'TUE'
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 4 THEN 'WED'
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 5 THEN 'THU'
+    WHEN EXTRACT (DAYOFWEEK FROM started_at) = 6 THEN 'FRI'
+  ELSE 'SAT'
+  END AS day_of_week,
+
+  CASE
+    WHEN EXTRACT (MONTH FROM started_at) = 1 THEN 'JAN'
+    WHEN EXTRACT (MONTH FROM started_at) = 2 THEN 'FEB'
+    WHEN EXTRACT (MONTH FROM started_at) = 3 THEN 'MAR'
+  ELSE 'UNKOWN'
+  END AS month,
+  EXTRACT (DAY FROM started_at) AS day,
+  EXTRACT (YEAR FROM started_at) AS year,
+  TIMESTAMP_DIFF (ended_at, started_at, minute) AS ride_length_m,
+  FORMAT_TIMESTAMP("%I:%M %p", started_at) AS start_time
+FROM 
+  first-solo-work.97Cycles.Q1_2021_update
+WHERE 
+  TIMESTAMP_DIFF (ended_at, started_at, minute) > 1 AND TIMESTAMP_DIFF (ended_at, started_at, hour) < 24;
+-- The analysis was then done from this table
+-- Calculate the number of rides taken by each rider type
+SELECT
+  COUNT(ride_id) AS number_of_ride, member_type
+FROM
+  first-solo-work.97Cycles.Q1_2021_final
+GROUP BY member_type;
+-- Calculate the average trip for each rider type in minutes
+SELECT
+  ROUND(AVG(ride_length_m), 2) AS average, member_type
+FROM
+  first-solo-work.97Cycles.Q1_2021_final
+GROUP BY member_type;
+-- Calculate the preferred type of bike by each rider type
+SELECT
+  COUNT(rideable_type) AS types_of_bike, rideable_type, member_type
+FROM
+  first-solo-work.97Cycles.Q1_2021_final
+GROUP BY member_type, rideable_type;
+-- To know the popular day of the week for each rider type
+SELECT  
+  count(day_of_week) AS count, day_of_week, member_type
+FROM  
+  first-solo-work.97Cycles.Q1_2021_final
+GROUP BY 
+  day_of_week, member_type;
+--To know the monthly ride pattern for each rider type
+SELECT  
+ count(month) AS count, month, member_type
+FROM  
+  first-solo-work.97Cycles.Q1_2021_final
+GROUP BY 
+  month, member_type;
